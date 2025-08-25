@@ -1,0 +1,69 @@
+﻿@page "/Error"
+@using System.Diagnostics
+@using CleanArchitecture.Blazor.Server.UI.Components.Shared
+@inject IStringLocalizer<Error> L
+
+<PageTitle>Server Error</PageTitle>
+
+<div style="display: flex; justify-content: center; align-items: center; min-height: 80vh; padding: 2rem;">
+    <MudPaper Class="pa-8" Elevation="1" Style="max-width: 600px; text-align: center;">
+        <MudText Typo="Typo.h3" Class="mb-2" Style="font-weight: 300;">
+            500
+        </MudText>
+        
+        <MudText Typo="Typo.h6" Class="mb-4" Color="Color.Default">
+            @L["Server Error"]
+        </MudText>
+        
+        <MudText Typo="Typo.body1" Class="mb-6" Color="Color.Secondary" Style="line-height: 1.5;">
+            @L["An unexpected error occurred. Please try again later."]
+        </MudText>
+
+        @if (IsDevelopment)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-6" Style="text-align: left;">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Development Mode</MudText>
+                <MudText Typo="Typo.body2" Class="mb-2">
+                    Swapping to <strong>Development</strong> environment will display more detailed information about the error that occurred.
+                </MudText>
+                <MudText Typo="Typo.body2">
+                    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
+                    It can result in displaying sensitive information from exceptions to end users.
+                </MudText>
+            </MudAlert>
+        }
+        
+        <MudStack Row Justify="Justify.Center" Spacing="2">
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Home"
+                      Href="/">
+                @L["Return Home"]
+            </MudButton>
+            
+            <MudButton Variant="Variant.Outlined" 
+                      Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Refresh"
+                      OnClick="RefreshPage">
+                @L["Try Again"]
+            </MudButton>
+        </MudStack>
+        
+    </MudPaper>
+</div>
+
+@code {
+   
+    [Inject] private IWebHostEnvironment Environment { get; set; } = default!;
+     private bool IsDevelopment => Environment.IsDevelopment();
+
+    protected override void OnInitialized()
+    {
+       
+    }
+
+    private void RefreshPage()
+    {
+        Navigation.Refresh();
+    }
+}

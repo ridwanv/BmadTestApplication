@@ -1,0 +1,54 @@
+﻿version: '3.8'
+
+services:
+  dashboard:
+    image: ${DOCKER_REGISTRY-}blazorserver
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - UseInMemoryDatabase=${USE_IN_MEMORY_DATABASE}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - ASPNETCORE_URLS=${ASPNETCORE_URLS}
+      - ASPNETCORE_HTTP_PORTS=${ASPNETCORE_HTTP_PORTS}
+      - ASPNETCORE_HTTPS_PORTS=${ASPNETCORE_HTTPS_PORTS}
+      - AppConfigurationSettings__ApplicationUrl=${APP_URL}
+      - AppConfigurationSettings__AppName=${APP_NAME}
+      - DatabaseSettings__DBProvider=${DB_PROVIDER}
+      - DatabaseSettings__ConnectionString=${DB_CONNECTION_STRING}
+      - AI__GeminiApiKey=${GEMINI_API_KEY}
+      - SmtpClientOptions__User=${SMTP_USER}
+      - SmtpClientOptions__Port=${SMTP_PORT}
+      - SmtpClientOptions__Server=${SMTP_SERVER}
+      - SmtpClientOptions__Password=${SMTP_PASSWORD}
+      - SmtpClientOptions__DefaultFromEmail=${SMTP_DEFAULT_FROM}
+      - Authentication__Microsoft__ClientId=${MS_CLIENT_ID}
+      - Authentication__Microsoft__ClientSecret=${MS_CLIENT_SECRET}
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET}
+      - Minio__Endpoint=${MINIO_ENDPOINT}
+      - Minio__AccessKey=${MINIO_ACCESS_KEY}
+      - Minio__SecretKey=${MINIO_SECRET_KEY}
+      - Minio__BucketName=${MINIO_BUCKET}
+ 
+    ports:
+      - "5005:80"
+      - "5006:443"
+    depends_on:
+      - sqldb
+    restart: on-failure
+
+  sqldb:
+    image: "mcr.microsoft.com/mssql/server:2022-latest"
+    environment:
+      - SA_PASSWORD=${SQL_SERVER_PASSWORD}
+      - ACCEPT_EULA=Y
+    volumes:
+      - mssql_data:/var/opt/mssql
+    ports:
+      - "3433:1433"
+    restart: on-failure
+
+volumes:
+  mssql_data:
+

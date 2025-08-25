@@ -1,0 +1,11 @@
+﻿@code {
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var returnUrl = uri.PathAndQuery.TrimStart('/');
+        Navigation.NavigateTo($"/account/login?returnUrl={returnUrl}", true);
+     
+    }
+
+}

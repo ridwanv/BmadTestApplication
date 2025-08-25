@@ -1,0 +1,85 @@
+﻿@using CleanArchitecture.Blazor.Application.Features.PicklistSets.Commands.AddEdit
+@inherits MudComponentBase
+@inject IStringLocalizer<PicklistSets> L
+
+<MudDialog>
+    <DialogContent>
+        <MudForm Model="_model" @ref="_form" Validation="@(Validator.ValidateValue(_model))">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <MudEnumSelect Label="@L[_model.GetMemberDescription(x => x.Name)]" @bind-Value="_model.Name"
+                                   For="@(() => _model.Name)"
+                                   Required="true"
+                                   RequiredError="@L["Name is required!"]">
+                    </MudEnumSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="@L[_model.GetMemberDescription(x => x.Description)]" @bind-Value="_model.Description"
+                                  For="@(() => _model.Description)">
+                    </MudTextField>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="@L[_model.GetMemberDescription(x => x.Value)]" @bind-Value="_model.Value"
+                                  For="@(() => _model.Value)"
+                                  Required="true"
+                                  RequiredError="@L["Value is required!"]">
+                    </MudTextField>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField Label="@L[_model.GetMemberDescription(x => x.Text)]" @bind-Value="_model.Text"
+                                  For="@(() => _model.Text)"
+                                  Required="true"
+                                  RequiredError="@L["Text is required!"]">
+                    </MudTextField>
+                </MudItem>
+
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">@ConstantString.Cancel</MudButton>
+        <MudLoadingButton Loading="@_saving" Color="Color.Primary" OnClick="Submit">@ConstantString.Save</MudLoadingButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code
+{
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [EditorRequired][Parameter] public AddEditPicklistSetCommand _model { get; set; } = default!;
+
+    private MudForm _form = new();
+    private bool _saving;
+
+    private async Task Submit()
+    {
+        try
+        {
+            _saving = true;
+            await _form.Validate().ConfigureAwait(false);
+            if (!_form.IsValid)
+                return;
+            var result = await Mediator.Send(_model);
+
+            if (result.Succeeded)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+                Snackbar.Add(ConstantString.SaveSuccess, Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add(result.ErrorMessage, Severity.Error);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}

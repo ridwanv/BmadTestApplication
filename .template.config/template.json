@@ -1,0 +1,43 @@
+{
+    "$schema": "http://json.schemastore.org/template",
+    "author": "hl.z",
+    "classifications": ["Web","Blazor","Clean Architecture"],
+    "name": "Clean Architecture for Blazor Server Solution",
+    "defaultName": "CleanArchitecture.Blazor",
+    "identity": "CleanArchitecture.Blazor.Solution.CSharp",
+    "groupIdentity": "CleanArchitecture.Blazor.Solution",
+    "shortName": "ca-blazorserver-sln",
+    "tags": {
+      "language": "C#",
+      "type": "project"
+    },
+    "sourceName": "CleanArchitecture.Blazor",
+    "preferNameDirectory": true,
+    "description": "This is a solution templates for creating a Blazor Server application following the principles of Clean Architecture",
+    "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "exclude": [
+        "README.md",
+        "**/[Bb]in/**",
+        "**/[Oo]bj/**",
+        ".template.config/**/*",
+        "templates/**/*",
+        ".vs/**/*",
+        ".vscode/**/*",
+        "doc/**/*",
+        "**/*.filelist",
+        "**/*.user",
+        "**/*.lock.json",
+        "**/.git/**",
+        "**/.github/**",
+        "*.nuspec",
+        "*.nupkg",
+        "launchSettings.json",
+        "*.exe",
+        "src/Server.UI/Files/**"
+      ]
+    }
+  ]
+  }

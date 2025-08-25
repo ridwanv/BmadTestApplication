@@ -1,0 +1,101 @@
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using CleanArchitecture.Blazor.Application.Features.Products.Caching;
+using CleanArchitecture.Blazor.Application.Features.Products.DTOs;
+
+
+namespace CleanArchitecture.Blazor.Application.Features.Products.Commands.Import;
+
+public class ImportProductsCommand : ICacheInvalidatorRequest<Result<int>>
+{
+    public ImportProductsCommand(string fileName, byte[] data)
+    {
+        FileName = fileName;
+        Data = data;
+    }
+
+    public string FileName { get; }
+    public byte[] Data { get; }
+    public string CacheKey => ProductCacheKey.GetAllCacheKey;
+    public IEnumerable<string>? Tags => ProductCacheKey.Tags;
+}
+
+public record CreateProductsTemplateCommand : IRequest<Result<byte[]>>
+{
+}
+
+public class ImportProductsCommandHandler :
+    IRequestHandler<CreateProductsTemplateCommand, Result<byte[]>>,
+    IRequestHandler<ImportProductsCommand, Result<int>>
+{
+    private readonly IApplicationDbContextFactory _dbContextFactory;
+    private readonly IMapper _mapper;
+    private readonly IExcelService _excelService;
+    private readonly IStringLocalizer<ImportProductsCommandHandler> _localizer;
+
+    public ImportProductsCommandHandler(
+        IApplicationDbContextFactory dbContextFactory,
+        IMapper mapper,
+        IExcelService excelService,
+        IStringLocalizer<ImportProductsCommandHandler> localizer
+    )
+    {
+        _dbContextFactory = dbContextFactory;
+        _localizer = localizer;
+        _excelService = excelService;
+        _mapper = mapper;
+    }
+
+    public async Task<Result<byte[]>> Handle(CreateProductsTemplateCommand request, CancellationToken cancellationToken)
+    {
+        var fields = new string[]
+        {
+            _localizer["Brand Name"],
+            _localizer["Product Name"],
+            _localizer["Description"],
+            _localizer["Unit"],
+            _localizer["Price of unit"],
+            _localizer["Pictures"]
+        };
+        var result = await _excelService.CreateTemplateAsync(fields, _localizer["Products"]);
+        return await Result<byte[]>.SuccessAsync(result);
+    }
+#nullable disable warnings
+    public async Task<Result<int>> Handle(ImportProductsCommand request, CancellationToken cancellationToken)
+    {
+        await using var db = await _dbContextFactory.CreateAsync(cancellationToken);
+        var result = await _excelService.ImportAsync(request.Data,
+            new Dictionary<string, Func<DataRow, ProductDto, object?>>
+            {
+                { _localizer["Brand Name"], (row, item) => item.Brand = row[_localizer["Brand Name"]].ToString() },
+                { _localizer["Product Name"], (row, item) => item.Name = row[_localizer["Product Name"]].ToString() },
+                {
+                    _localizer["Description"],
+                    (row, item) => item.Description = row[_localizer["Description"]].ToString()
+                },
+                { _localizer["Unit"], (row, item) => item.Unit = row[_localizer["Unit"]].ToString() },
+                {
+                    _localizer["Price of unit"],
+                    (row, item) => item.Price = row.FieldDecimalOrDefault(_localizer["Price of unit"])
+                },
+                {
+                    _localizer["Pictures"],
+                    (row, item) => item.Pictures = string.IsNullOrEmpty(row[_localizer["Pictures"]].ToString())
+                        ? new List<ProductImage>()
+                        : JsonSerializer.Deserialize<List<ProductImage>>(row[_localizer["Pictures"]].ToString())
+                }
+            }, _localizer["Products"]);
+        if (!result.Succeeded) return await Result<int>.FailureAsync(result.Errors);
+        {
+            foreach (var dto in result.Data!)
+            {
+                var item = _mapper.Map<Product>(dto);
+                await db.Products.AddAsync(item, cancellationToken);
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+            return await Result<int>.SuccessAsync(result.Data.Count());
+        }
+    }
+}

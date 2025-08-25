@@ -1,0 +1,611 @@
+﻿@page "/identity/roles"
+@using CleanArchitecture.Blazor.Application.Common.Interfaces.Identity
+@using CleanArchitecture.Blazor.Application.Common.Interfaces.MultiTenant
+@using CleanArchitecture.Blazor.Domain.Identity
+@using CleanArchitecture.Blazor.Application.Features.Identity.DTOs
+@using System.Security.Claims
+
+@using CleanArchitecture.Blazor.Server.UI.Pages.Identity.Roles.Components
+@using CleanArchitecture.Blazor.Application.Common.Constants.ClaimTypes
+@using System.Linq.Expressions
+@using ZiggyCreatures.Caching.Fusion
+@using CleanArchitecture.Blazor.Application.Common.Constants
+@using CleanArchitecture.Blazor.Application.Common.Security
+@using System.Data
+@using CleanArchitecture.Blazor.Server.UI.Services.Identity
+
+@attribute [Authorize(Policy = Permissions.Roles.View)]
+@inherits OwningComponentBase
+@inject ITenantService _tenantService
+@inject IRoleService _roleService
+@inject IFusionCache _fusionCache
+@inject IStringLocalizer<Roles> _localizer
+@inject IExcelService ExcelService
+@inject BlazorDownloadFileService BlazorDownloadFileService
+@inject IExcelService ExcelService
+@inject BlazorDownloadFileService BlazorDownloadFileService
+@inject IExcelService ExcelService
+@inject BlazorDownloadFileService BlazorDownloadFileService
+
+<PageTitle>@_title</PageTitle>
+
+<MudDataGrid T="ApplicationRoleDto" @ref="_dataGrid"
+             FixedHeader="true"
+             FixedFooter="false"
+             Hover="true"
+             MultiSelection="true"
+             @bind-RowsPerPage="_defaultPageSize"
+             @bind-SelectedItems="_selectedRoles"
+             Loading="@_isLoading"
+             ServerData="ServerReload">
+    <ToolBarContent>
+        <MudStack Row Spacing="0" Class="flex-grow-1" Justify="Justify.SpaceBetween">
+            <!-- Left Toolbar: Icon, Title, and Tenant selection -->
+            <MudStack Row AlignItems="AlignItems.Start">
+                <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Large" />
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">@_title</MudText>
+                    <MudSelect T="string" Style="min-width:120px" Value="@_selectedTenantId" ValueChanged="OnTenantChanged" Dense="true" Label="@_localizer["List View"]">
+                        <MudSelectItem T="string" Value="@(" ")">@_localizer["ALL"]</MudSelectItem>
+                        @foreach (var tenant in _tenantService.DataSource)
+                        {
+                            <MudSelectItem T="string" Value="@tenant.Id">@tenant.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+            </MudStack>
+            <!-- Right Toolbar: Refresh, Create, More Actions, and Search -->
+            <MudStack Spacing="0" AlignItems="AlignItems.End">
+                <MudToolBar Dense WrapContent="true" Class="py-1 px-0">
+                    <MudButton Disabled="@_isLoading"
+                               OnClick="OnRefresh"
+                               StartIcon="@Icons.Material.Outlined.Refresh">
+                        @ConstantString.Refresh
+                    </MudButton>
+                    @if (_accessRights.Create)
+                    {
+                        <MudButton StartIcon="@Icons.Material.Outlined.Add"
+                                   OnClick="OnCreate">
+                            @ConstantString.New
+                        </MudButton>
+                    }
+                    <MudMenu TransformOrigin="Origin.BottomRight" AnchorOrigin="Origin.BottomRight" EndIcon="@Icons.Material.Filled.MoreVert" Label="@ConstantString.More">
+                        @if (_accessRights.Delete)
+                        {
+                            <MudMenuItem Disabled="@(!_selectedRoles.Any())" OnClick="OnDeleteChecked">
+                                @ConstantString.Delete
+                            </MudMenuItem>
+                        }
+                        @if (_accessRights.Export)
+                        {
+                            <MudMenuItem Disabled="@_isExporting" OnClick="OnExport">
+                                @ConstantString.Export
+                            </MudMenuItem>
+                        }
+                        @if (_accessRights.Import)
+                        {
+                            <MudMenuItem>
+                                <MudFileUpload T="IBrowserFile" FilesChanged="OnImportData" Accept=".xlsx">
+                                    <ActivatorContent>
+                                        <MudButton Class="pa-0 ma-0" Style="font-weight:400;text-transform:none;"
+                                                   Variant="Variant.Text" Disabled="@_isUploading">
+                                            @ConstantString.Import
+                                        </MudButton>
+                                    </ActivatorContent>
+                                </MudFileUpload>
+                            </MudMenuItem>
+                        }
+                    </MudMenu>
+                </MudToolBar>
+                @if (_accessRights.Search)
+                {
+                    <MudTextField T="string" Immediate="false" Value="@_searchString" FullWidth="false" ValueChanged="OnSearch"
+                                  Placeholder="@_localizer["Search by role name"]" Adornment="Adornment.End"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small">
+                    </MudTextField>
+                }
+            </MudStack>
+        </MudStack>
+    </ToolBarContent>
+    <Columns>
+        <SelectColumn ShowInFooter="false" />
+        <TemplateColumn HeaderStyle="width:60px" Title="@ConstantString.Actions" Sortable="false">
+            <CellTemplate>
+                @if (_accessRights.Edit || _accessRights.Delete || _accessRights.ManagePermissions)
+                {
+                    <MudMenu Icon="@Icons.Material.Filled.Edit" Variant="Variant.Outlined" Size="Size.Small"
+                             Dense="true" EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                             IconColor="Color.Info" AnchorOrigin="Origin.CenterLeft">
+                        @if (_accessRights.Edit)
+                        {
+                            <MudMenuItem OnClick="@(() => OnEdit(context.Item))">@ConstantString.Edit</MudMenuItem>
+                        }
+                        @if (_accessRights.Delete)
+                        {
+                            <MudMenuItem OnClick="@(() => OnDelete(context.Item))">@ConstantString.Delete</MudMenuItem>
+                        }
+                        @if (_accessRights.ManagePermissions)
+                        {
+                            <MudMenuItem OnClick="@(() => OnSetPermissions(context.Item))">@_localizer["Set Permissions"]</MudMenuItem>
+                        }
+                    </MudMenu>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.DoNotTouch"
+                               IconColor="Color.Secondary" Size="Size.Small" Color="Color.Surface">
+                        @ConstantString.NoAllowed
+                    </MudButton>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.TenantId" Title="@_localizer[_currentDto.GetMemberDescription(x => x.Tenant)]">
+            <CellTemplate>
+                <MudText>@context.Item.Tenant?.Name</MudText>
+            </CellTemplate>
+            <FooterTemplate>
+                @_localizer["Selected"]: @_selectedRoles.Count
+            </FooterTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Name" Title="@_localizer[_currentDto.GetMemberDescription(x => x.Name)]" />
+        <PropertyColumn Property="x => x.Description" Title="@_localizer[_currentDto.GetMemberDescription(x => x.Description)]">
+            <CellTemplate>
+                <div class="d-flex flex-column">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@context.Item.Description</MudText>
+                </div>
+            </CellTemplate>
+        </PropertyColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager PageSizeOptions="@(new[] { 10, 15, 30, 50, 100, 500, 1000 })" />
+    </PagerContent>
+</MudDataGrid>
+
+<PermissionsDrawer OnAssignAllChanged="OnAssignAllChangedHandler"
+                   Waiting="@_isProcessing"
+                   OnOpenChanged="OnPermissionsDrawerOpenChanged"
+                   Open="_showPermissionsDrawer"
+                   Permissions="_permissions"
+                   OnAssignChanged="OnAssignChangedHandler">
+</PermissionsDrawer>
+
+@code {
+    #region Fields and Properties
+
+    [CascadingParameter] private Task<AuthenticationState> _authState { get; set; } = default!;
+    private RoleManager<ApplicationRole> _roleManager = null!;
+    private string? _title { get; set; }
+    private bool _isProcessing;
+    private string _currentRoleName = string.Empty;
+    private int _defaultPageSize = 15;
+    private HashSet<ApplicationRoleDto> _selectedRoles = new();
+    private readonly ApplicationRoleDto _currentDto = new();
+    private string _searchString = string.Empty;
+    private string _selectedTenantId = " ";
+    private TimeSpan _refreshInterval => TimeSpan.FromHours(2);
+    private IList<PermissionModel> _permissions = new List<PermissionModel>();
+    private MudDataGrid<ApplicationRoleDto> _dataGrid = null!;
+    private bool _showPermissionsDrawer;
+    private bool _isLoading;
+    private bool _isUploading;
+    private bool _isExporting;
+    private RolePermissionAssignmentService _permissionAssignmentService = null!;
+    private RolesAccessRights _accessRights = new();
+
+    #endregion
+
+    #region Lifecycle Methods    
+    protected override async Task OnInitializedAsync()
+    {
+        InitializeServices();
+        _title = _localizer[_currentDto.GetClassDescription()];
+        _accessRights = await PermissionService.GetAccessRightsAsync<RolesAccessRights>();
+        await _tenantService.InitializeAsync();
+    }
+
+    private void InitializeServices()
+    {
+        _roleManager = ScopedServices.GetRequiredService<RoleManager<ApplicationRole>>();
+        _permissionAssignmentService = ScopedServices.GetRequiredService<RolePermissionAssignmentService>();
+    }
+
+    #endregion
+
+    #region Grid and Search
+
+    // Create the search predicate for filtering roles by name, description, and tenant.
+    private Expression<Func<ApplicationRole, bool>> CreateSearchPredicate()
+    {
+        return role =>
+            (role.Name!.ToLower().Contains(_searchString) || role.Description!.ToLower().Contains(_searchString)) &&
+            (_selectedTenantId == " " || role.TenantId == _selectedTenantId);
+    }
+
+    // Retrieve grid data from the server.
+    private async Task<GridData<ApplicationRoleDto>> ServerReload(GridState<ApplicationRoleDto> state)
+    {
+        _isLoading = true;
+        try
+        {
+            var predicate = CreateSearchPredicate();
+            var totalCount = await _roleManager.Roles.CountAsync(predicate);
+            var roles = await _roleManager.Roles
+                .Where(predicate)
+                .ApplySortDefinitions(state)
+                .Skip(state.Page * state.PageSize)
+                .Take(state.PageSize)
+                .ProjectTo<ApplicationRoleDto>(Mapper.ConfigurationProvider)
+                .ToListAsync();
+
+            return new GridData<ApplicationRoleDto> { TotalItems = totalCount, Items = roles };
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // Handle tenant selection changes.
+    private async Task OnTenantChanged(string tenantId)
+    {
+        _selectedTenantId = tenantId;
+        await _dataGrid.ReloadServerData();
+    }
+
+    // Handle search text changes.
+    private async Task OnSearch(string text)
+    {
+        if (_isLoading) return;
+        _searchString = text.ToLower();
+        await _dataGrid.ReloadServerData();
+    }
+
+    // Refresh the grid data.
+    private async Task OnRefresh()
+    {
+        await InvokeAsync(async () =>
+        {
+            _selectedRoles = new HashSet<ApplicationRoleDto>();
+            await _roleService.RefreshAsync();
+            await _dataGrid.ReloadServerData();
+        });
+    }
+
+    #endregion
+
+    #region Create and Edit Roles
+
+    // Open dialog to create a new role.
+    private async Task OnCreate()
+    {
+        var newRoleDto = new ApplicationRoleDto { Name = string.Empty };
+        await ShowRoleDialog(newRoleDto, _localizer["Create a new role"], async role =>
+        {
+            return await _roleManager.CreateAsync(role);
+        });
+    }
+
+    // Open dialog to edit an existing role.
+    private async Task OnEdit(ApplicationRoleDto item)
+    {
+        await ShowRoleDialog(item, _localizer["Edit the role"], async role =>
+        {
+            var existingRole = await _roleManager.FindByIdAsync(item.Id);
+            if (existingRole is not null)
+            {
+                existingRole.TenantId = item.Tenant?.Id;
+                existingRole.Description = item.Description;
+                existingRole.Name = item.Name;
+                return await _roleManager.UpdateAsync(existingRole);
+            }
+            return IdentityResult.Failed(new IdentityError { Description = "Role not found." });
+        });
+    }
+
+    // Display a role dialog and process the save action.
+    private async Task ShowRoleDialog(ApplicationRoleDto model, string title, Func<ApplicationRole, Task<IdentityResult>> saveAction)
+    {
+        var parameters = new DialogParameters<RoleFormDialog>
+        {
+            { x => x.Model, model }
+        };
+        var options = new DialogOptions { CloseButton = true, CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<RoleFormDialog>(title, parameters, options);
+        var dialogResult = await dialog.Result;
+
+        if (dialogResult is not null && !dialogResult.Canceled)
+        {
+            var applicationRole = new ApplicationRole
+            {
+                TenantId = model.Tenant?.Id,
+                Name = model.Name,
+                Description = model.Description
+            };
+
+            var result = await saveAction(applicationRole);
+            if (result.Succeeded)
+            {
+                Snackbar.Add(ConstantString.CreateSuccess, Severity.Info);
+                await OnRefresh();
+            }
+            else
+            {
+                Snackbar.Add(string.Join(",", result.Errors.Select(x => x.Description)), Severity.Error);
+            }
+        }
+    }
+
+    #endregion
+
+    #region Permissions Handling
+
+    // Open permissions drawer and load permissions for the selected role.
+    private async Task OnSetPermissions(ApplicationRoleDto item)
+    {
+        _showPermissionsDrawer = true;
+        _currentRoleName = item.Name!;
+        _permissions = await _permissionAssignmentService.LoadAsync(item.Id);
+    }
+
+    // Update drawer open state.
+    private Task OnPermissionsDrawerOpenChanged(bool state)
+    {
+        _showPermissionsDrawer = state;
+        return Task.CompletedTask;
+    }
+
+    // Process a single permission change.
+    private async Task OnAssignChangedHandler(PermissionModel model)
+    {
+        _isProcessing = true;
+        try
+        {
+            await _permissionAssignmentService.AssignAsync(model);
+            Snackbar.Add(model.Assigned ? _localizer["Permission assigned successfully"] : _localizer["Permission removed successfully"], Severity.Info);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    // Process batch permission changes.
+    private async Task OnAssignAllChangedHandler(List<PermissionModel> models)
+    {
+        _isProcessing = true;
+        try
+        {
+            await _permissionAssignmentService.AssignBulkAsync(models);
+            Snackbar.Add(_localizer["Authorization has been changed"], Severity.Info);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    #endregion
+
+    #region Deletion
+
+    // Delete a single role after confirmation.
+    private async Task OnDelete(ApplicationRoleDto dto)
+    {
+        await DialogServiceHelper.ShowConfirmationDialogAsync(
+            ConstantString.DeleteConfirmationTitle,
+            string.Format(ConstantString.DeleteConfirmation, dto.Name),
+            async () =>
+            {
+                var rolesToDelete = await _roleManager.Roles.Where(x => x.Id == dto.Id).ToListAsync();
+                foreach (var role in rolesToDelete)
+                {
+                    var deleteResult = await _roleManager.DeleteAsync(role);
+                    if (!deleteResult.Succeeded)
+                    {
+                        Snackbar.Add(string.Join(",", deleteResult.Errors.Select(x => x.Description)), Severity.Error);
+                        return;
+                    }
+                }
+                Snackbar.Add(ConstantString.DeleteSuccess, Severity.Info);
+                await OnRefresh();
+            });
+    }
+
+    // Delete selected roles after confirmation.
+    private async Task OnDeleteChecked()
+    {
+        await DialogServiceHelper.ShowConfirmationDialogAsync(
+            ConstantString.DeleteConfirmationTitle,
+            string.Format(ConstantString.DeleteConfirmation, _selectedRoles.Count),
+            async () =>
+            {
+                var deleteIds = _selectedRoles.Select(x => x.Id).ToArray();
+                var rolesToDelete = await _roleManager.Roles.Where(x => deleteIds.Contains(x.Id)).ToListAsync();
+                foreach (var role in rolesToDelete)
+                {
+                    var deleteResult = await _roleManager.DeleteAsync(role);
+                    if (!deleteResult.Succeeded)
+                    {
+                        Snackbar.Add(string.Join(",", deleteResult.Errors.Select(x => x.Description)), Severity.Error);
+                        return;
+                    }
+                }
+                Snackbar.Add(ConstantString.DeleteSuccess, Severity.Info);
+                await OnRefresh();
+            });
+    }
+
+    #endregion
+
+    #region Export and Import    // Export role data to Excel.
+    private async Task OnExport()
+    {
+        _isExporting = true;
+        try
+        {
+            // Prepare the query predicate based on current filter settings
+            var predicate = CreateSearchPredicate();
+            
+            // Retrieve the roles to export
+            var roles = await _roleManager.Roles
+                .Where(predicate)
+                .OrderBy(r => r.TenantId)
+                .ThenBy(r => r.Name)
+                .ProjectTo<ApplicationRoleDto>(Mapper.ConfigurationProvider)
+                .ToListAsync();
+
+            // Export to Excel using IExcelService
+            var fileData = await ExcelService.ExportAsync(roles, 
+                new Dictionary<string, Func<ApplicationRoleDto, object?>>
+                {
+                    { _localizer["Id"], item => item.Id },
+                    { _localizer["Tenant Name"], item => item.Tenant.Name },
+                    { _localizer["Name"], item => item.Name },
+                    { _localizer["Normalized Name"], item => item.NormalizedName },
+                    { _localizer["Description"], item => item.Description }
+                }, 
+                _localizer["Roles"]);
+                
+            // Download the Excel file
+            await BlazorDownloadFileService.DownloadFileAsync($"{_localizer["Roles"]}.xlsx", fileData, "application/octet-stream");
+            Snackbar.Add(ConstantString.ExportSuccess, Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"{ConstantString.ExportFail}: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isExporting = false;
+        }
+    }    // Import role data from Excel file.
+    private async Task OnImportData(IBrowserFile file)
+    {
+        _isUploading = true;
+        try
+        {
+            // Read the file into a memory stream
+            using var stream = new MemoryStream();
+            await file.OpenReadStream(GlobalVariable.MaxAllowedSize).CopyToAsync(stream);
+            
+            // Import data from Excel using IExcelService
+            var importResult = await ImportRolesFromExcelAsync(stream);
+            
+            if (importResult?.Succeeded == true)
+            {
+                if (importResult.Data != null)
+                {
+                    // Process the imported roles
+                    await ProcessImportedRolesAsync(importResult.Data);
+                    await _dataGrid.ReloadServerData();
+                }
+                Snackbar.Add(ConstantString.ImportSuccess, Severity.Info);
+            }
+            else if (importResult?.Errors != null)
+            {
+                foreach (var error in importResult.Errors)
+                {
+                    Snackbar.Add(error, Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"{ConstantString.ImportFail}: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isUploading = false;
+        }
+    }
+    
+    // Helper method to import roles from Excel.
+    private async Task<IResult<IEnumerable<ApplicationRole>>> ImportRolesFromExcelAsync(MemoryStream stream)
+    {
+        return await ExcelService.ImportAsync<ApplicationRole>(stream.ToArray(), 
+            new Dictionary<string, Func<DataRow, ApplicationRole, object?>>
+            {
+                { _localizer["Name"], (row, item) => item.Name = row[_localizer["Name"]]?.ToString() },
+                { _localizer["Description"], (row, item) => item.Description = row[_localizer["Description"]]?.ToString() },
+                { _localizer["Tenant Name"], (row, item) => 
+                    {
+                        var tenantName = row[_localizer["Tenant Name"]]?.ToString();
+                        if (!string.IsNullOrEmpty(tenantName))
+                        {
+                            var tenant = _tenantService.DataSource.FirstOrDefault(t => t.Name == tenantName);
+                            item.TenantId = tenant?.Id;
+                        }
+                        return item.TenantId;
+                    }
+                }
+            });
+    }
+    
+    // Helper method to process the imported roles.
+    private async Task ProcessImportedRolesAsync(IEnumerable<ApplicationRole> importedRoles)
+    {
+        var createdCount = 0;
+        var updatedCount = 0;
+        var errors = 0;
+        
+        foreach (var importedRole in importedRoles)
+        {
+            try
+            {
+                // Check if the role already exists for this tenant
+                var existingRole = await _roleManager.Roles.FirstOrDefaultAsync(
+                    r => r.NormalizedName == _roleManager.NormalizeKey(importedRole.Name) && 
+                         r.TenantId == importedRole.TenantId);
+                
+                if (existingRole == null)
+                {
+                    // Create new role
+                    var result = await _roleManager.CreateAsync(importedRole);
+                    if (result.Succeeded)
+                    {
+                        createdCount++;
+                    }
+                    else
+                    {
+                        errors++;
+                    }
+                }
+                else
+                {
+                    // Update existing role
+                    existingRole.Description = importedRole.Description;
+                    var result = await _roleManager.UpdateAsync(existingRole);
+                    if (result.Succeeded)
+                    {
+                        updatedCount++;
+                    }
+                    else
+                    {
+                        errors++;
+                    }
+                }
+            }
+            catch
+            {
+                errors++;
+            }
+        }
+        
+        if (createdCount > 0)
+        {
+            Snackbar.Add($"Created {createdCount} new roles", Severity.Success);
+        }
+        
+        if (updatedCount > 0)
+        {
+            Snackbar.Add($"Updated {updatedCount} existing roles", Severity.Success);
+        }
+        
+        if (errors > 0)
+        {
+            Snackbar.Add($"Failed to import {errors} roles", Severity.Error);
+        }
+    }
+
+    #endregion
+}

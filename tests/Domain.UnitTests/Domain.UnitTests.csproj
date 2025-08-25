@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <RootNamespace>CleanArchitecture.Blazor.Domain.UnitTests</RootNamespace>
+        <AssemblyName>CleanArchitecture.Blazor.Domain.UnitTests</AssemblyName>
+
+        <IsPackable>false</IsPackable>
+
+        <LangVersion>default</LangVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+        <PackageReference Include="nunit" Version="4.4.0" />
+        <PackageReference Include="NUnit3TestAdapter" Version="5.1.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="FluentAssertions" Version="8.6.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Domain\Domain.csproj" />
+    </ItemGroup>
+
+</Project>
