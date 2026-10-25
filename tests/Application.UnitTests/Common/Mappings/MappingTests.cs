@@ -10,6 +10,7 @@ using CleanArchitecture.Blazor.Application.Features.Identity.DTOs;
 using CleanArchitecture.Blazor.Application.Features.PicklistSets.DTOs;
 using CleanArchitecture.Blazor.Application.Features.Products.DTOs;
 using CleanArchitecture.Blazor.Application.Features.SystemLogs.DTOs;
+using CleanArchitecture.Blazor.Application.Features.Systems.DTOs;
 using CleanArchitecture.Blazor.Application.Features.Tenants.DTOs;
 using CleanArchitecture.Blazor.Domain.Entities;
 using CleanArchitecture.Blazor.Domain.Identity;
@@ -38,6 +39,7 @@ public class MappingTests
     [TestCase(typeof(Tenant), typeof(TenantDto), true)]
     [TestCase(typeof(Product), typeof(ProductDto), true)]
     [TestCase(typeof(Contact), typeof(ContactDto), true)]
+    [TestCase(typeof(Domain.Entities.System), typeof(SystemDto), true)]
     [TestCase(typeof(PicklistSet), typeof(PicklistSetDto), true)]
     [TestCase(typeof(ApplicationUser), typeof(ApplicationUserDto), false)]
     [TestCase(typeof(ApplicationRole), typeof(ApplicationRoleDto), false)]

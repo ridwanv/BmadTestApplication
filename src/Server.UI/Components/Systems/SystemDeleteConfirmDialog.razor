@@ -1,0 +1,154 @@
+@using CleanArchitecture.Blazor.Application.Features.Systems.DTOs
+@using CleanArchitecture.Blazor.Application.Features.Systems.Commands.Delete
+
+@inject IStringLocalizer<SystemDeleteConfirmDialog> L
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudIcon Icon="Icons.Material.Outlined.Warning" Color="Color.Warning" Class="mr-2" />
+        Confirm System Deletion
+    </TitleContent>
+    <DialogContent>
+        <MudContainer>
+            <MudAlert Severity="Severity.Warning" Class="mb-4">
+                <MudText>
+                    <strong>Warning:</strong> This action cannot be undone. The system and all its associated data will be permanently deleted.
+                </MudText>
+            </MudAlert>
+            
+            <MudText Typo="Typo.body1" Class="mb-3">
+                Are you sure you want to delete the following system?
+            </MudText>
+            
+            <MudCard Outlined="true" Class="mb-4">
+                <MudCardContent>
+                    <MudGrid>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Name:</MudText>
+                            <MudText Typo="Typo.body2">@SystemDto.Name</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Category:</MudText>
+                            <MudText Typo="Typo.body2">@SystemDto.Category</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Description:</MudText>
+                            <MudText Typo="Typo.body2">@SystemDto.Description</MudText>
+                        </MudItem>
+                        @if (!string.IsNullOrEmpty(SystemDto.OwnerId))
+                        {
+                            <MudItem xs="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Primary">Owner:</MudText>
+                                <MudText Typo="Typo.body2">@SystemDto.OwnerId</MudText>
+                            </MudItem>
+                        }
+                        <MudItem xs="6">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Status:</MudText>
+                            <MudChip T="string" Size="Size.Small" 
+                                     Color="@GetStatusColor(SystemDto.Status)" 
+                                     Text="@SystemDto.Status" />
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+            
+            <!-- Impact Assessment -->
+            <MudExpansionPanels>
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div style="display: flex;">
+                            <MudIcon Icon="Icons.Material.Outlined.Assessment" class="mr-3"></MudIcon>
+                            <MudText>Impact Assessment</MudText>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudList T="string">
+                            <MudListItem T="string" Icon="Icons.Material.Outlined.History" Text="All system version history will be deleted" />
+                            <MudListItem T="string" Icon="Icons.Material.Outlined.AccountTree" Text="Any subsystem relationships will be removed" />
+                            <MudListItem T="string" Icon="Icons.Material.Outlined.Link" Text="Dependencies to/from this system will be deleted" />
+                            <MudListItem T="string" Icon="Icons.Material.Outlined.Assignment" Text="Audit logs for this system will be preserved separately" />
+                        </MudList>
+                    </ChildContent>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+            
+            <MudTextField @bind-Value="_confirmationText"
+                          Label="Type 'DELETE' to confirm"
+                          Placeholder="DELETE"
+                          Class="mt-4"
+                          Variant="Variant.Outlined"
+                          HelperText="Type DELETE (case-sensitive) to enable the delete button"
+                          Immediate="true" />
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">
+            Cancel
+        </MudButton>
+        <MudLoadingButton Loading="@_processing"
+                          LoadingText="Deleting..."
+                          OnClick="Delete"
+                          Variant="Variant.Filled"
+                          Color="Color.Error"
+                          StartIcon="Icons.Material.Outlined.Delete"
+                          Disabled="@(!IsDeleteConfirmed)">
+            Delete System
+        </MudLoadingButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public SystemDto SystemDto { get; set; } = default!;
+    
+    private bool _processing = false;
+    private string _confirmationText = string.Empty;
+    
+    private bool IsDeleteConfirmed => _confirmationText == "DELETE";
+    
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Active" => Color.Success,
+        "Inactive" => Color.Warning,
+        "Deprecated" => Color.Error,
+        "Planned" => Color.Info,
+        _ => Color.Default
+    };
+    
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+    
+    private async Task Delete()
+    {
+        if (!IsDeleteConfirmed) return;
+        
+        try
+        {
+            _processing = true;
+            
+            var deleteCommand = new DeleteSystemCommand(new[] { SystemDto.Id });
+            var result = await Mediator.Send(deleteCommand);
+            
+            if (result.Succeeded)
+            {
+                Snackbar.Add($"System '{SystemDto.Name}' deleted successfully", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add($"Error deleting system: {result.ErrorMessage}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+}

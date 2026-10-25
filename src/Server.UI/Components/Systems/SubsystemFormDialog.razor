@@ -1,0 +1,129 @@
+@using CleanArchitecture.Blazor.Application.Features.Subsystems.Commands.Create
+@using CleanArchitecture.Blazor.Application.Features.Subsystems.Commands.Update
+@using CleanArchitecture.Blazor.Application.Features.Subsystems.DTOs
+@using CleanArchitecture.Blazor.Application.Features.Systems.DTOs
+@using CleanArchitecture.Blazor.Domain.Common.Enums
+@inherits MudComponentBase
+
+<style>
+    .mud-table-toolbar {
+        height: 120px !important;
+    }
+</style>
+
+<MudDialog>
+    <DialogContent>
+        <MudForm Model="@model" @ref="@_form" Validation="@(_modelValidator.ValidateValue)" ValidationDelay="0">
+            <MudGrid>
+                <MudItem xs="12" sm="12" md="12">
+                    <MudTextField Label="@L["Name"]"
+                                  @bind-Value="model.Name"
+                                  For="@(() => model.Name)"
+                                  Required="true"
+                                  RequiredError="@L["name is required!"]">
+                    </MudTextField>
+                </MudItem>
+                <MudItem xs="12" sm="12" md="12">
+                    <MudTextField Label="@L["Type"]"
+                                  @bind-Value="model.Type"
+                                  For="@(() => model.Type)">
+                    </MudTextField>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">@ConstantString.Cancel</MudButton>
+        <MudLoadingButton Loading="@_saving" Color="MudBlazor.Color.Primary" OnClick="Submit">@ConstantString.Ok</MudLoadingButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    MudForm? _form;
+    private bool _saving = false;
+    private readonly SubsystemDto model = new();
+
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Inject] 
+    private IStringLocalizer<SubsystemFormDialog> L { get; set; } = default!;
+
+    [Parameter] 
+    public SubsystemDto Model { get; set; } = new();
+    
+    [Parameter]
+    public int SystemId { get; set; }
+
+    private readonly Func<object, string, Task<IEnumerable<string>>> _modelValidator = async (model, propertyName) =>
+    {
+        var result = await FluentValidationValidator.ValidateAsync(model, propertyName);
+        return result;
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Model.Id == 0)
+        {
+            model.SystemId = SystemId;
+        }
+        else
+        {
+            model.Id = Model.Id;
+            model.SystemId = Model.SystemId;
+            model.Name = Model.Name;
+            model.Type = Model.Type;
+        }
+        await base.OnInitializedAsync();
+    }
+
+    async Task Submit()
+    {
+        try
+        {
+            _saving = true;
+            await _form!.Validate().ConfigureAwait(false);
+            if (!_form!.IsValid)
+                return;
+            
+            var result = new Result<int>();
+            if (model.Id == 0)
+            {
+                var command = new CreateSubsystemCommand()
+                {
+                    SystemId = model.SystemId,
+                    Name = model.Name,
+                    Type = model.Type
+                };
+                result = await Mediator.Send(command);
+            }
+            else
+            {
+                var command = new UpdateSubsystemCommand()
+                {
+                    Id = model.Id,
+                    SystemId = model.SystemId,
+                    Name = model.Name,
+                    Type = model.Type
+                };
+                result = await Mediator.Send(command);
+            }
+            
+            if (result.Succeeded)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+                Snackbar.Add(ConstantString.SaveSuccessfully, Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add(result.ErrorMessage, Severity.Error);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,472 @@
+@page "/pages/systems/{SystemId:int}"
+
+@using CleanArchitecture.Blazor.Application.Features.Systems.DTOs
+@using CleanArchitecture.Blazor.Application.Features.Systems.Queries.GetById
+@using CleanArchitecture.Blazor.Application.Features.Systems.Commands.Update
+@using CleanArchitecture.Blazor.Application.Features.Systems.Commands.Delete
+@using CleanArchitecture.Blazor.Server.UI.Components.Systems
+
+@inject IStringLocalizer<SystemDetails> L
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+@attribute [Authorize(Policy = Permissions.Systems.View)]
+
+<PageTitle>@_pageTitle</PageTitle>
+
+@if (_loading)
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="pa-6">
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="200px" />
+        <MudSkeleton SkeletonType="SkeletonType.Text" Height="40px" Class="mt-4" />
+        <MudSkeleton SkeletonType="SkeletonType.Text" Height="300px" Class="mt-2" />
+    </MudContainer>
+}
+else if (_system == null)
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="pa-6">
+        <MudAlert Severity="Severity.Warning">
+            <MudText Typo="Typo.h6">System not found</MudText>
+            <MudText>The requested system could not be found or you don't have permission to view it.</MudText>
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo("/pages/systems"))" Class="mt-4">
+            Back to Systems
+        </MudButton>
+    </MudContainer>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="pa-6">
+        <!-- Header Section -->
+        <MudPaper Class="pa-4 mb-4">
+            <div class="d-flex align-center justify-space-between">
+                <div class="d-flex align-center">
+                    <MudButton StartIcon="Icons.Material.Outlined.ArrowBack"
+                              Variant="Variant.Text"
+                              OnClick="@(() => Navigation.NavigateTo("/pages/systems"))"
+                              Class="mr-4">
+                        Back to Systems
+                    </MudButton>
+                    <div>
+                        <MudText Typo="Typo.h4">@_system.Name</MudText>
+                        <div class="d-flex align-center mt-2">
+                            <MudChip T="string" Size="Size.Small" 
+                                     Color="@GetStatusColor(_system.Status)" 
+                                     Text="@_system.Status" 
+                                     Class="mr-2" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@_system.Category</MudText>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    @if (_canEdit)
+                    {
+                        <MudButton StartIcon="Icons.Material.Outlined.Edit"
+                                  Color="Color.Primary"
+                                  Variant="Variant.Filled"
+                                  OnClick="EditSystem"
+                                  Class="mr-2">
+                            Edit System
+                        </MudButton>
+                    }
+                    @if (_canDelete)
+                    {
+                        <MudButton StartIcon="Icons.Material.Outlined.Delete"
+                                  Color="Color.Error"
+                                  Variant="Variant.Outlined"
+                                  OnClick="DeleteSystem">
+                            Delete
+                        </MudButton>
+                    }
+                </div>
+            </div>
+        </MudPaper>
+
+        <!-- Tabbed Content -->
+        <MudTabs Elevation="4" Rounded="true" Color="Color.Primary">
+            <!-- Overview Tab -->
+            <MudTabPanel Text="Overview" Icon="@Icons.Material.Outlined.Dashboard">
+                <MudContainer Class="pa-4">
+                    <MudGrid>
+                        <!-- Basic Information Card -->
+                        <MudItem xs="12" md="6">
+                            <MudCard Class="h-100">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">
+                                            <MudIcon Icon="Icons.Material.Outlined.Info" Class="mr-2" />
+                                            Basic Information
+                                        </MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudGrid>
+                                        <MudItem xs="12">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Description</MudText>
+                                            <MudText Typo="Typo.body2">@_system.Description</MudText>
+                                        </MudItem>
+                                        <MudItem xs="6">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Type</MudText>
+                                            <MudText Typo="Typo.body2">@_system.Type</MudText>
+                                        </MudItem>
+                                        <MudItem xs="6">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Category</MudText>
+                                            <MudText Typo="Typo.body2">@_system.Category</MudText>
+                                        </MudItem>
+                                        <MudItem xs="6">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Status</MudText>
+                                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_system.Status)" Text="@_system.Status" />
+                                        </MudItem>
+                                        <MudItem xs="6">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Owner</MudText>
+                                            <MudText Typo="Typo.body2">@(_system.OwnerId ?? "Not assigned")</MudText>
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <!-- System Attributes Card -->
+                        <MudItem xs="12" md="6">
+                            <MudCard Class="h-100">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">
+                                            <MudIcon Icon="Icons.Material.Outlined.Settings" Class="mr-2" />
+                                            System Attributes
+                                        </MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudGrid>
+                                        <MudItem xs="12">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">COTS/Custom</MudText>
+                                            <MudText Typo="Typo.body2">@_system.CotsCustom</MudText>
+                                        </MudItem>
+                                        <MudItem xs="12">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Insource/Outsource</MudText>
+                                            <MudText Typo="Typo.body2">@_system.InsourceOutsource</MudText>
+                                        </MudItem>
+                                        <MudItem xs="6">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Current Hosting</MudText>
+                                            <MudText Typo="Typo.body2">@_system.HostingCurrent</MudText>
+                                        </MudItem>
+                                        <MudItem xs="6">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Target Hosting</MudText>
+                                            <MudText Typo="Typo.body2">@(!string.IsNullOrEmpty(_system.HostingTarget) ? _system.HostingTarget : "Same as current")</MudText>
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <!-- System Metadata Card -->
+                        <MudItem xs="12">
+                            <MudCard>
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">
+                                            <MudIcon Icon="Icons.Material.Outlined.Schedule" Class="mr-2" />
+                                            System Metadata
+                                        </MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudGrid>
+                                        <MudItem xs="12" md="3">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">System ID</MudText>
+                                            <MudText Typo="Typo.body2">@_system.Id</MudText>
+                                        </MudItem>
+                                        <MudItem xs="12" md="3">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Created</MudText>
+                                            <MudText Typo="Typo.body2">@(_system.Created?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</MudText>
+                                        </MudItem>
+                                        <MudItem xs="12" md="3">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Created By</MudText>
+                                            <MudText Typo="Typo.body2">@(_system.CreatedBy ?? "N/A")</MudText>
+                                        </MudItem>
+                                        <MudItem xs="12" md="3">
+                                            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Last Modified</MudText>
+                                            <MudText Typo="Typo.body2">@(_system.LastModified?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</MudText>
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    </MudGrid>
+                </MudContainer>
+            </MudTabPanel>
+
+            <!-- Attributes Tab -->
+            <MudTabPanel Text="Attributes" Icon="@Icons.Material.Outlined.Tune">
+                <MudContainer Class="pa-4">
+                    <MudAlert Severity="Severity.Info" Class="mb-4">
+                        <MudText><strong>Coming Soon:</strong> Dynamic attribute management will be available in future versions.</MudText>
+                        <MudText>This feature will allow you to add custom attributes to systems based on configurable schemas.</MudText>
+                    </MudAlert>
+                    
+                    <MudText Typo="Typo.h6" Class="mb-4">Current System Attributes</MudText>
+                    <MudDataGrid T="AttributeDisplayModel" Items="@_systemAttributes" Dense="true" Hover="true">
+                        <Columns>
+                            <PropertyColumn Property="x => x.Name" Title="Attribute" />
+                            <PropertyColumn Property="x => x.Value" Title="Value" />
+                            <PropertyColumn Property="x => x.Type" Title="Type" />
+                        </Columns>
+                    </MudDataGrid>
+                </MudContainer>
+            </MudTabPanel>
+
+            <!-- Dependencies Tab -->
+            <MudTabPanel Text="Dependencies" Icon="@Icons.Material.Outlined.AccountTree">
+                <MudContainer Class="pa-4">
+                    <MudAlert Severity="Severity.Info" Class="mb-4">
+                        <MudText><strong>Coming Soon:</strong> System dependency mapping will be available in future versions.</MudText>
+                        <MudText>This feature will allow you to map integrations and dependencies between systems.</MudText>
+                    </MudAlert>
+                    
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudCard>
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">Dependencies (Upstream)</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudText Color="Color.Secondary">No dependencies mapped yet</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudCard>
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">Dependents (Downstream)</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudText Color="Color.Secondary">No dependents mapped yet</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    </MudGrid>
+                </MudContainer>
+            </MudTabPanel>
+
+            <!-- History Tab -->
+            <MudTabPanel Text="History" Icon="@Icons.Material.Outlined.History">
+                <MudContainer Class="pa-4">
+                    <MudAlert Severity="Severity.Info" Class="mb-4">
+                        <MudText><strong>Coming Soon:</strong> System change history will be available in future versions.</MudText>
+                        <MudText>This feature will show a complete audit trail of all changes made to this system.</MudText>
+                    </MudAlert>
+                    
+                    <MudCard>
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">Change History</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudTimeline TimelineAlign="TimelineAlign.Start">
+                                <MudTimelineItem Color="Color.Success" Size="Size.Small">
+                                    <MudText Typo="Typo.body2"><strong>System Created</strong></MudText>
+                                    <MudText Typo="Typo.caption">@(_system.Created?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</MudText>
+                                    <MudText Typo="Typo.caption">by @(_system.CreatedBy ?? "N/A")</MudText>
+                                </MudTimelineItem>
+                                @if (_system.LastModified.HasValue && _system.LastModified != _system.Created)
+                                {
+                                    <MudTimelineItem Color="Color.Primary" Size="Size.Small">
+                                        <MudText Typo="Typo.body2"><strong>System Updated</strong></MudText>
+                                        <MudText Typo="Typo.caption">@(_system.LastModified?.ToString("yyyy-MM-dd HH:mm") ?? "N/A")</MudText>
+                                        <MudText Typo="Typo.caption">by @(_system.LastModifiedBy ?? "N/A")</MudText>
+                                    </MudTimelineItem>
+                                }
+                            </MudTimeline>
+                        </MudCardContent>
+                    </MudCard>
+                </MudContainer>
+            </MudTabPanel>
+
+            <!-- Ownership Tab -->
+            <MudTabPanel Text="Ownership" Icon="@Icons.Material.Outlined.Person">
+                <MudContainer Class="pa-4">
+                    <MudCard>
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">System Ownership</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                @if (_canEdit)
+                                {
+                                    <MudButton StartIcon="Icons.Material.Outlined.Edit" 
+                                              Color="Color.Primary" 
+                                              OnClick="EditOwnership">
+                                        Change Owner
+                                    </MudButton>
+                                }
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudGrid>
+                                <MudItem xs="12" md="6">
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">Current Owner</MudText>
+                                    <MudText Typo="Typo.h6">@(_system.OwnerId ?? "Not assigned")</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">System Owner ID</MudText>
+                                </MudItem>
+                                <MudItem xs="12" md="6">
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">Ownership Notes</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">Owner assigned during system creation</MudText>
+                                </MudItem>
+                            </MudGrid>
+                            
+                            <MudDivider Class="my-4" />
+                            
+                            <MudAlert Severity="Severity.Info">
+                                <MudText><strong>Note:</strong> System owners have full control over their systems, including editing and deleting.</MudText>
+                                <MudText>Contact your administrator if you need to change system ownership.</MudText>
+                            </MudAlert>
+                        </MudCardContent>
+                    </MudCard>
+                </MudContainer>
+            </MudTabPanel>
+        </MudTabs>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public int SystemId { get; set; }
+    
+    private SystemDto? _system;
+    private bool _loading = true;
+    private bool _canEdit = false;
+    private bool _canDelete = false;
+    private string _pageTitle = "System Details";
+    private List<AttributeDisplayModel> _systemAttributes = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize permissions
+        _canEdit = true; // Placeholder - should check Permissions.Systems.Edit
+        _canDelete = true; // Placeholder - should check Permissions.Systems.Delete
+        
+        await LoadSystem();
+    }
+    
+    private async Task LoadSystem()
+    {
+        try
+        {
+            _loading = true;
+            var query = new GetSystemByIdQuery { Id = SystemId };
+            var result = await Mediator.Send(query);
+            
+            if (result.Succeeded && result.Data != null)
+            {
+                _system = result.Data;
+                _pageTitle = $"{_system.Name} - System Details";
+                PopulateSystemAttributes();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading system: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    
+    private void PopulateSystemAttributes()
+    {
+        if (_system == null) return;
+        
+        _systemAttributes = new List<AttributeDisplayModel>
+        {
+            new() { Name = "Name", Value = _system.Name, Type = "Text" },
+            new() { Name = "Description", Value = _system.Description, Type = "Text" },
+            new() { Name = "Category", Value = _system.Category, Type = "Selection" },
+            new() { Name = "Type", Value = _system.Type, Type = "Selection" },
+            new() { Name = "COTS/Custom", Value = _system.CotsCustom, Type = "Selection" },
+            new() { Name = "Current Hosting", Value = _system.HostingCurrent, Type = "Selection" },
+            new() { Name = "Target Hosting", Value = _system.HostingTarget ?? "Same as current", Type = "Selection" },
+            new() { Name = "Insource/Outsource", Value = _system.InsourceOutsource, Type = "Selection" },
+            new() { Name = "Status", Value = _system.Status, Type = "Selection" },
+            new() { Name = "Owner ID", Value = _system.OwnerId ?? "Not assigned", Type = "Text" }
+        };
+    }
+    
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Active" => Color.Success,
+        "Inactive" => Color.Warning,
+        "Deprecated" => Color.Error,
+        "Planned" => Color.Info,
+        _ => Color.Default
+    };
+    
+    private async Task EditSystem()
+    {
+        if (_system == null) return;
+        
+        var parameters = new DialogParameters
+        {
+            ["SystemDto"] = _system,
+            ["IsEditMode"] = true
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true, 
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<SystemFormDialog>($"Edit System: {_system.Name}", parameters, options);
+        var result = await dialog.Result;
+        
+        if (!result!.Canceled)
+        {
+            await LoadSystem(); // Reload the system data
+        }
+    }
+    
+    private async Task DeleteSystem()
+    {
+        if (_system == null) return;
+        
+        var parameters = new DialogParameters
+        {
+            ["SystemDto"] = _system
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true, 
+            MaxWidth = MaxWidth.Medium
+        };
+        
+        var dialog = await DialogService.ShowAsync<SystemDeleteConfirmDialog>($"Delete System", parameters, options);
+        var result = await dialog.Result;
+        
+        if (!result!.Canceled)
+        {
+            Navigation.NavigateTo("/pages/systems");
+        }
+    }
+    
+    private async Task EditOwnership()
+    {
+        // TODO: Create ownership change dialog
+        Snackbar.Add("Ownership change dialog not yet implemented", Severity.Info);
+    }
+    
+    private class AttributeDisplayModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+    }
+}

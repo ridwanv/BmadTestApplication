@@ -1,0 +1,732 @@
+@page "/pages/systems"
+
+@using CleanArchitecture.Blazor.Application.Features.Systems.Caching
+@using CleanArchitecture.Blazor.Application.Features.Systems.DTOs
+@using CleanArchitecture.Blazor.Application.Features.Systems.Specifications
+@using CleanArchitecture.Blazor.Application.Features.Systems.Commands.Delete
+@using CleanArchitecture.Blazor.Application.Features.Systems.Queries.Pagination
+@using CleanArchitecture.Blazor.Application.Features.Systems.Commands.Create
+@using CleanArchitecture.Blazor.Application.Features.Systems.Commands.Update
+@using CleanArchitecture.Blazor.Application.Features.Systems.Queries.Export
+@using CleanArchitecture.Blazor.Application.Features.Subsystems.DTOs
+@using CleanArchitecture.Blazor.Application.Features.Subsystems.Queries.GetHierarchy
+@using CleanArchitecture.Blazor.Application.Features.Subsystems.Commands.Delete
+@using CleanArchitecture.Blazor.Domain.Common.Enums
+@using CleanArchitecture.Blazor.Server.UI.Components.Systems
+
+@inject IStringLocalizer<Systems> L
+@inject BlazorDownloadFileService BlazorDownloadFileService
+
+@attribute [Authorize(Policy = Permissions.Systems.View)]
+<PageTitle>@Title</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="pa-6">
+    <MudText Typo="Typo.h4" GutterBottom="true">@Title</MudText>
+    <MudText Typo="Typo.body1" Class="mb-6">Manage system registry with CRUD operations, search, and filtering capabilities.</MudText>
+
+    <!-- View Mode Tabs -->
+    <MudTabs Elevation="2" Rounded="true" Centered="false" Class="mb-4">
+        <MudTabPanel Text="List View" Icon="@Icons.Material.Filled.List">
+            @ListViewContent
+        </MudTabPanel>
+        <MudTabPanel Text="Hierarchy View" Icon="@Icons.Material.Filled.AccountTree">
+            @HierarchyViewContent
+        </MudTabPanel>
+    </MudTabs>
+</MudContainer>
+
+@code {
+    private string Title = "Systems";
+    private bool _loading = false;
+    private bool _canCreate = false;
+    private bool _canEdit = false; 
+    private bool _canDelete = false;
+    
+    // Grid and selection
+    private MudDataGrid<SystemDto> _systemsGrid = default!;
+    private HashSet<SystemDto> _selectedSystems = new();
+    
+    // Filter properties
+    private string _searchKeyword = string.Empty;
+    private string _filterCategory = string.Empty;
+    private string _filterStatus = string.Empty;
+    private string _filterHosting = string.Empty;
+    private string _filterCotsCustom = string.Empty;
+    
+    // Filter helpers
+    private int _activeFilterCount => GetActiveFilterCount();
+    private bool HasActiveFilters => _activeFilterCount > 0;
+    
+    // Export state
+    private bool _exporting = false;
+    private bool _pdfExporting = false;
+    
+    // Hierarchy view state
+    private List<SystemDto> _systemsForHierarchy = new();
+    private SystemDto? _selectedSystemForHierarchy;
+    private SystemHierarchyDto? _hierarchyData;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize permissions (these would come from actual permission service)
+        _canCreate = true; // Placeholder - should check Permissions.Systems.Create
+        _canEdit = true;   // Placeholder - should check Permissions.Systems.Edit
+        _canDelete = true; // Placeholder - should check Permissions.Systems.Delete
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadSystemsForHierarchy();
+            StateHasChanged();
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    // Render Fragments
+    private RenderFragment ListViewContent => 
+    @<div>
+        <!-- Advanced Filters Section -->
+        <MudExpansionPanels Class="mb-4">
+            <MudExpansionPanel>
+                <TitleContent>
+                    <div style="display: flex;">
+                        <MudIcon Icon="Icons.Material.Outlined.FilterList" class="mr-3"></MudIcon>
+                        <MudText>Advanced Filters</MudText>
+                        @if (HasActiveFilters)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Text="@_activeFilterCount.ToString()" Class="ml-2" />
+                        }
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    <MudGrid>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_searchKeyword"
+                                          Label="Search"
+                                          Placeholder="Search systems..."
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="Icons.Material.Outlined.Search"
+                                          Variant="Variant.Outlined"
+                                          Clearable="true"
+                                          OnClearButtonClick="@(() => _searchKeyword = string.Empty)"
+                                          DebounceInterval="500"
+                                          OnDebounceIntervalElapsed="@(() => _systemsGrid?.ReloadServerData())" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudSelect @bind-Value="_filterCategory"
+                                       Label="Category"
+                                       Placeholder="All Categories"
+                                       Variant="Variant.Outlined"
+                                       Clearable="true"
+                                       OnClearButtonClick="@(() => { _filterCategory = string.Empty; _systemsGrid?.ReloadServerData(); })">
+                                <MudSelectItem Value="@("Business Application")" Text="Business Application" />
+                                <MudSelectItem Value="@("Infrastructure")" Text="Infrastructure" />
+                                <MudSelectItem Value="@("Database")" Text="Database" />
+                                <MudSelectItem Value="@("Integration")" Text="Integration" />
+                                <MudSelectItem Value="@("Security")" Text="Security" />
+                                <MudSelectItem Value="@("Monitoring")" Text="Monitoring" />
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudSelect @bind-Value="_filterStatus"
+                                       Label="Status"
+                                       Placeholder="All Statuses"
+                                       Variant="Variant.Outlined"
+                                       Clearable="true"
+                                       OnClearButtonClick="@(() => { _filterStatus = string.Empty; _systemsGrid?.ReloadServerData(); })">
+                                <MudSelectItem Value="@("Active")" Text="Active" />
+                                <MudSelectItem Value="@("Inactive")" Text="Inactive" />
+                                <MudSelectItem Value="@("Deprecated")" Text="Deprecated" />
+                                <MudSelectItem Value="@("Planned")" Text="Planned" />
+                            </MudSelect>
+                        </MudItem>
+                    </MudGrid>
+                </ChildContent>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+
+        <!-- Toolbar Section -->
+        <MudStack Row="true" Class="mb-4" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudStack Row="true" Spacing="2">
+                <MudButton StartIcon="@Icons.Material.Outlined.Add" 
+                           Color="Color.Primary" 
+                           Variant="Variant.Filled"
+                           OnClick="CreateSystem"
+                           Disabled="@(!_canCreate)">
+                    Create System
+                </MudButton>
+                
+                @if (_selectedSystems.Any())
+                {
+                    <MudButton StartIcon="@Icons.Material.Outlined.Delete" 
+                               Color="Color.Error" 
+                               Variant="Variant.Outlined"
+                               OnClick="BulkDeleteSystems"
+                               Disabled="@(!_canDelete)">
+                        Delete Selected (@_selectedSystems.Count)
+                    </MudButton>
+                    
+                    <MudButton StartIcon="@Icons.Material.Outlined.Edit" 
+                               Color="Color.Warning" 
+                               Variant="Variant.Outlined"
+                               OnClick="BulkUpdateStatus"
+                               Disabled="@(!_canEdit)">
+                        Update Status
+                    </MudButton>
+                }
+            </MudStack>
+
+            <MudStack Row="true" Spacing="2">
+                @if (HasActiveFilters)
+                {
+                    <MudButton StartIcon="@Icons.Material.Outlined.FilterAltOff" 
+                               Color="Color.Default" 
+                               Variant="Variant.Text"
+                               OnClick="ClearAllFilters">
+                        Clear Filters
+                    </MudButton>
+                }
+                
+                <!-- Export Menu -->
+                <MudMenu Icon="@Icons.Material.Outlined.FileDownload" 
+                         Color="Color.Primary" 
+                         Variant="Variant.Outlined"
+                         Label="Export"
+                         Size="Size.Small">
+                    <MudMenuItem OnClick="@(() => ExportData("excel"))"
+                                 Icon="@Icons.Material.Outlined.TableView"
+                                 Disabled="@_exporting">
+                        @if (_exporting)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span style="margin-left: 8px;">Exporting...</span>
+                        }
+                        else
+                        {
+                            <span>Export to Excel</span>
+                        }
+                    </MudMenuItem>
+                    <MudMenuItem OnClick="@(() => ExportData("pdf"))"
+                                 Icon="@Icons.Material.Outlined.PictureAsPdf"
+                                 Disabled="@_pdfExporting">
+                        @if (_pdfExporting)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                            <span style="margin-left: 8px;">Exporting...</span>
+                        }
+                        else
+                        {
+                            <span>Export to PDF</span>
+                        }
+                    </MudMenuItem>
+                </MudMenu>
+            </MudStack>
+        </MudStack>
+
+        <!-- Data Grid -->
+        <MudDataGrid @ref="_systemsGrid"
+                     T="SystemDto"
+                     ServerData="@(new Func<GridState<SystemDto>, Task<GridData<SystemDto>>>(ServerReload))"
+                     Filterable="false"
+                     SortMode="@SortMode.Multiple"
+                     Hover="true"
+                     Loading="@_loading"
+                     MultiSelection="true"
+                     @bind-SelectedItems="_selectedSystems"
+                     Elevation="4">
+            
+            <Columns>
+                <SelectColumn T="SystemDto" />
+                <PropertyColumn Property="x => x.Id" Title="ID" Sortable="true" />
+                <PropertyColumn Property="x => x.Name" Title="Name" Sortable="true">
+                    <CellTemplate>
+                        <MudText Typo="Typo.body2" Style="font-weight: 500;">
+                            @context.Item.Name
+                        </MudText>
+                    </CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.Category" Title="Category" Sortable="true" />
+                <PropertyColumn Property="x => x.Type" Title="Type" Sortable="true" />
+                <PropertyColumn Property="x => x.Status" Title="Status" Sortable="true">
+                    <CellTemplate>
+                        <MudChip T="string" Size="Size.Small" 
+                                 Color="@GetStatusColor(context.Item.Status)" 
+                                 Text="@context.Item.Status" />
+                    </CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.HostingCurrent" Title="Hosting" Sortable="true" />
+                <PropertyColumn Property="x => x.OwnerId" Title="Owner" Sortable="true" />
+                <TemplateColumn Title="Actions" Sortable="false">
+                    <CellTemplate>
+                        <MudTooltip Text="View Details">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Visibility"
+                                          Color="Color.Info"
+                                          OnClick="@(() => ViewSystemDetails(context.Item))"
+                                          Size="Size.Small" />
+                        </MudTooltip>
+                        <MudTooltip Text="Edit System">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                          Color="Color.Primary"
+                                          OnClick="@(() => EditSystem(context.Item))"
+                                          Disabled="@(!_canEdit)"
+                                          Size="Size.Small" />
+                        </MudTooltip>
+                        <MudTooltip Text="Delete System">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete"
+                                          Color="Color.Error"  
+                                          OnClick="@(() => DeleteSystem(context.Item))"
+                                          Disabled="@(!_canDelete)"
+                                          Size="Size.Small" />
+                        </MudTooltip>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            
+            <PagerContent>
+                <MudDataGridPager T="SystemDto" />
+            </PagerContent>
+        </MudDataGrid>
+    </div>;
+
+    private RenderFragment HierarchyViewContent =>
+    @<div>
+        <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 16px;">
+            <MudSelect @bind-Value="_selectedSystemForHierarchy"
+                       Label="Select System"
+                       Placeholder="Choose a system to view hierarchy"
+                       Variant="Variant.Outlined"
+                       Style="min-width: 300px;">
+                @foreach (var system in _systemsForHierarchy)
+                {
+                    <MudSelectItem Value="system">@system.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudButton Color="Color.Primary" 
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="@LoadSystemHierarchy"
+                       Disabled="@(_selectedSystemForHierarchy == null)"
+                       Variant="Variant.Filled">
+                Load Hierarchy
+            </MudButton>
+        </div>
+
+        @if (_hierarchyData != null)
+        {
+            <SystemHierarchyTree HierarchyData="_hierarchyData" 
+                                OnAddSubsystem="@AddSubsystem"
+                                OnEditSubsystem="@EditSubsystem" 
+                                OnDeleteSubsystem="@DeleteSubsystem" />
+        }
+        else if (_selectedSystemForHierarchy != null)
+        {
+            <MudAlert Severity="Severity.Info">
+                <MudText>No hierarchy data loaded. Click "Load Hierarchy" to view the system structure.</MudText>
+            </MudAlert>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Normal">
+                <MudText>Select a system above to view its hierarchical structure with subsystems.</MudText>
+            </MudAlert>
+        }
+    </div>;
+
+    // Continuing with all the existing methods...
+    private async Task<GridData<SystemDto>> ServerReload(GridState<SystemDto> state)
+    {
+        try
+        {
+            _loading = true;
+            
+            var query = new SystemsWithPaginationQuery
+            {
+                PageNumber = state.Page + 1,
+                PageSize = state.PageSize,
+                Keyword = _searchKeyword,
+                OrderBy = state.SortDefinitions.FirstOrDefault()?.SortBy ?? "Id",
+                SortDirection = state.SortDefinitions.FirstOrDefault()?.Descending == true ? "Descending" : "Ascending",
+                Category = _filterCategory,
+                Status = _filterStatus,
+                HostingCurrent = _filterHosting,
+                CotsCustom = _filterCotsCustom
+            };
+
+            var result = await Mediator.Send(query);
+            return new GridData<SystemDto> { Items = result.Items, TotalItems = result.TotalItems };
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    
+    private int GetActiveFilterCount()
+    {
+        int count = 0;
+        if (!string.IsNullOrEmpty(_searchKeyword)) count++;
+        if (!string.IsNullOrEmpty(_filterCategory)) count++;
+        if (!string.IsNullOrEmpty(_filterStatus)) count++;
+        if (!string.IsNullOrEmpty(_filterHosting)) count++;
+        if (!string.IsNullOrEmpty(_filterCotsCustom)) count++;
+        return count;
+    }
+    
+    private async Task ClearAllFilters()
+    {
+        _searchKeyword = string.Empty;
+        _filterCategory = string.Empty;
+        _filterStatus = string.Empty;
+        _filterHosting = string.Empty;
+        _filterCotsCustom = string.Empty;
+        await _systemsGrid.ReloadServerData();
+    }
+    
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Active" => Color.Success,
+        "Inactive" => Color.Warning,
+        "Deprecated" => Color.Error,
+        "Planned" => Color.Info,
+        _ => Color.Default
+    };
+
+    private async Task CreateSystem()
+    {
+        var parameters = new DialogParameters
+        {
+            ["IsEditMode"] = false
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true, 
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<SystemFormDialog>("Create System", parameters, options);
+        var result = await dialog.Result;
+        
+        if (!result!.Canceled)
+        {
+            await _systemsGrid.ReloadServerData();
+            _selectedSystems.Clear();
+        }
+    }
+
+    private async Task EditSystem(SystemDto system)
+    {
+        var parameters = new DialogParameters
+        {
+            ["SystemDto"] = system,
+            ["IsEditMode"] = true
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true, 
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<SystemFormDialog>($"Edit System: {system.Name}", parameters, options);
+        var result = await dialog.Result;
+        
+        if (!result!.Canceled)
+        {
+            await _systemsGrid.ReloadServerData();
+            _selectedSystems.Clear();
+        }
+    }
+
+    private async Task DeleteSystem(SystemDto system)
+    {
+        var parameters = new DialogParameters
+        {
+            ["SystemDto"] = system
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true, 
+            MaxWidth = MaxWidth.Medium
+        };
+        
+        var dialog = await DialogService.ShowAsync<SystemDeleteConfirmDialog>($"Delete System", parameters, options);
+        var result = await dialog.Result;
+        
+        if (!result!.Canceled)
+        {
+            await _systemsGrid.ReloadServerData();
+            _selectedSystems.Clear();
+        }
+    }
+    
+    private async Task ViewSystemDetails(SystemDto system)
+    {
+        Snackbar.Add($"System details page for '{system.Name}' not yet implemented", Severity.Info);
+    }
+    
+    private async Task BulkDeleteSystems()
+    {
+        if (!_selectedSystems.Any()) return;
+        
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirm Bulk Delete",
+            $"Are you sure you want to delete {_selectedSystems.Count} selected systems? This action cannot be undone.",
+            "Delete All", 
+            "Cancel");
+            
+        if (confirm == true)
+        {
+            try
+            {
+                var ids = _selectedSystems.Select(s => s.Id).ToArray();
+                var deleteCommand = new DeleteSystemCommand(ids);
+                var result = await Mediator.Send(deleteCommand);
+                
+                if (result.Succeeded)
+                {
+                    Snackbar.Add($"Successfully deleted {_selectedSystems.Count} systems", Severity.Success);
+                    await _systemsGrid.ReloadServerData();
+                    _selectedSystems.Clear();
+                }
+                else
+                {
+                    Snackbar.Add($"Error deleting systems: {result.ErrorMessage}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+    
+    private async Task BulkUpdateStatus()
+    {
+        Snackbar.Add($"Bulk status update for {_selectedSystems.Count} systems not yet implemented", Severity.Info);
+    }
+    
+    private async Task ExportData(string format)
+    {
+        if (format.ToLower() == "csv" || format.ToLower() == "excel")
+        {
+            await OnExportExcel();
+        }
+        else if (format.ToLower() == "pdf")
+        {
+            await OnExportPDF();
+        }
+    }
+    
+    private async Task OnExportExcel()
+    {
+        _exporting = true;
+        var request = new ExportSystemsQuery
+        {
+            Keyword = _searchKeyword,
+            Category = _filterCategory,
+            Status = _filterStatus,
+            HostingCurrent = _filterHosting,
+            CotsCustom = _filterCotsCustom,
+            Type = _filterCategory,
+            InsourceOutsource = _filterCotsCustom,
+            OrderBy = _systemsGrid.SortDefinitions.Values.FirstOrDefault()?.SortBy ?? "Id",
+            SortDirection = (_systemsGrid.SortDefinitions.Values.FirstOrDefault()?.Descending ?? false) ? "Descending" : "Ascending",
+            ExportType = ExportType.Excel
+        };
+        
+        var result = await Mediator.Send(request);
+        if (result.Succeeded)
+        {
+            await BlazorDownloadFileService.DownloadFileAsync($"{L["Systems"]}.xlsx", result.Data!, "application/octet-stream");
+            Snackbar.Add($"Export to Excel completed successfully", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add($"Export failed: {result.ErrorMessage}", Severity.Error);
+        }
+        _exporting = false;
+    }
+    
+    private async Task OnExportPDF()
+    {
+        _pdfExporting = true;
+        var request = new ExportSystemsQuery
+        {
+            Keyword = _searchKeyword,
+            Category = _filterCategory,
+            Status = _filterStatus,
+            HostingCurrent = _filterHosting,
+            CotsCustom = _filterCotsCustom,
+            Type = _filterCategory,
+            InsourceOutsource = _filterCotsCustom,
+            OrderBy = _systemsGrid.SortDefinitions.Values.FirstOrDefault()?.SortBy ?? "Id",
+            SortDirection = (_systemsGrid.SortDefinitions.Values.FirstOrDefault()?.Descending ?? false) ? "Descending" : "Ascending",
+            ExportType = ExportType.PDF
+        };
+        
+        var result = await Mediator.Send(request);
+        if (result.Succeeded)
+        {
+            await BlazorDownloadFileService.DownloadFileAsync($"{L["Systems"]}.pdf", result.Data!, "application/octet-stream");
+            Snackbar.Add($"Export to PDF completed successfully", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add($"Export failed: {result.ErrorMessage}", Severity.Error);
+        }
+        _pdfExporting = false;
+    }
+
+    // Hierarchy View Methods
+    private async Task LoadSystemsForHierarchy()
+    {
+        try
+        {
+            var query = new SystemsWithPaginationQuery
+            {
+                PageNumber = 1,
+                PageSize = 1000,
+                OrderBy = "Name",
+                SortDirection = "Ascending"
+            };
+            
+            var result = await Mediator.Send(query);
+            _systemsForHierarchy = result.Items.ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading systems: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadSystemHierarchy()
+    {
+        if (_selectedSystemForHierarchy == null) return;
+        
+        try
+        {
+            var query = new GetSystemHierarchyQuery { SystemId = _selectedSystemForHierarchy.Id };
+            var result = await Mediator.Send(query);
+            
+            if (result.Succeeded)
+            {
+                _hierarchyData = result.Data;
+            }
+            else
+            {
+                Snackbar.Add($"Error loading hierarchy: {result.ErrorMessage}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading hierarchy: {ex.Message}", Severity.Error);
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task AddSubsystem(int systemId)
+    {
+        var parameters = new DialogParameters
+        {
+            ["SystemId"] = systemId
+        };
+        
+        var options = new DialogOptions 
+        { 
+            CloseButton = true, 
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+        
+        var dialog = await DialogService.ShowAsync<SubsystemFormDialog>("Add Subsystem", parameters, options);
+        var result = await dialog.Result;
+        
+        if (!result!.Canceled)
+        {
+            await LoadSystemHierarchy();
+            Snackbar.Add("Subsystem added successfully", Severity.Success);
+        }
+    }
+
+    private async Task EditSubsystem(int subsystemId)
+    {
+        try
+        {
+            var getQuery = new CleanArchitecture.Blazor.Application.Features.Subsystems.Queries.GetById.GetSubsystemByIdQuery 
+            { 
+                Id = subsystemId 
+            };
+            var getResult = await Mediator.Send(getQuery);
+            
+            if (getResult.Succeeded)
+            {
+                var parameters = new DialogParameters
+                {
+                    ["Model"] = getResult.Data
+                };
+                
+                var options = new DialogOptions 
+                { 
+                    CloseButton = true, 
+                    MaxWidth = MaxWidth.Medium,
+                    FullWidth = true
+                };
+                
+                var dialog = await DialogService.ShowAsync<SubsystemFormDialog>($"Edit Subsystem: {getResult.Data.Name}", parameters, options);
+                var result = await dialog.Result;
+                
+                if (!result!.Canceled)
+                {
+                    await LoadSystemHierarchy();
+                    Snackbar.Add("Subsystem updated successfully", Severity.Success);
+                }
+            }
+            else
+            {
+                Snackbar.Add($"Error loading subsystem: {getResult.ErrorMessage}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error editing subsystem: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteSubsystem(int subsystemId)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            "Are you sure you want to delete this subsystem? This action cannot be undone.",
+            "Delete", 
+            "Cancel");
+            
+        if (confirm == true)
+        {
+            try
+            {
+                var deleteCommand = new CleanArchitecture.Blazor.Application.Features.Subsystems.Commands.Delete.DeleteSubsystemCommand(new[] { subsystemId });
+                var result = await Mediator.Send(deleteCommand);
+                
+                if (result.Succeeded)
+                {
+                    await LoadSystemHierarchy();
+                    Snackbar.Add("Subsystem deleted successfully", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add($"Error deleting subsystem: {result.ErrorMessage}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deleting subsystem: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

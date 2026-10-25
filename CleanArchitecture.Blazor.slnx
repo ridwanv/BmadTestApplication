@@ -19,8 +19,6 @@
     <Project Path="src/Migrators/Migrators.SqLite/Migrators.SqLite.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Application.IntegrationTests/Application.IntegrationTests.csproj" />
-    <Project Path="tests/Application.UnitTests/Application.UnitTests.csproj" />
     <Project Path="tests/Domain.UnitTests/Domain.UnitTests.csproj" />
   </Folder>
   <Project Path="docker-compose.dcproj">

@@ -1,0 +1,114 @@
+@using CleanArchitecture.Blazor.Application.Features.Subsystems.DTOs
+@using CleanArchitecture.Blazor.Application.Features.Systems.DTOs
+@inherits MudComponentBase
+
+<MudTreeView T="HierarchyNode" Items="@_treeItems" @bind-SelectedValue="_selectedValue" @bind-ActivatedValue="_activatedValue">
+    <ItemTemplate>
+        <MudTreeViewItem @bind-Expanded="@context.IsExpanded" 
+                         Items="@context.Children"
+                         Value="@context"
+                         Text="@context.Text"
+                         Icon="@(context.IsSystem ? Icons.Material.Filled.Computer : Icons.Material.Filled.DeviceHub)"
+                         IconColor="@(context.IsSystem ? Color.Primary : Color.Secondary)">
+            <Content>
+                <div style="display: grid; grid-template-columns: 1fr auto; width: 100%; align-items: center;">
+                    <div style="display: flex; align-items: center;">
+                        <MudIcon Icon="@(context.IsSystem ? Icons.Material.Filled.Computer : Icons.Material.Filled.DeviceHub)" 
+                                 Color="@(context.IsSystem ? Color.Primary : Color.Secondary)"
+                                 Style="margin-right: 8px;" />
+                        <span>@context.Text</span>
+                        @if (!string.IsNullOrEmpty(context.Type))
+                        {
+                            <MudChip Size="Size.Small" Color="Color.Info" Style="margin-left: 8px;">@context.Type</MudChip>
+                        }
+                    </div>
+                    <div>
+                        @if (context.IsSystem)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" 
+                                          Size="Size.Small" 
+                                          Color="Color.Primary"
+                                          Title="Add Subsystem"
+                                          OnClick="@(() => OnAddSubsystem?.Invoke(context.SystemId))" />
+                        }
+                        else
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                          Size="Size.Small" 
+                                          Color="Color.Warning"
+                                          Title="Edit Subsystem"
+                                          OnClick="@(() => OnEditSubsystem?.Invoke(context.SubsystemId!.Value))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                          Size="Size.Small" 
+                                          Color="Color.Error"
+                                          Title="Delete Subsystem"
+                                          OnClick="@(() => OnDeleteSubsystem?.Invoke(context.SubsystemId!.Value))" />
+                        }
+                    </div>
+                </div>
+            </Content>
+        </MudTreeViewItem>
+    </ItemTemplate>
+</MudTreeView>
+
+@code {
+    [Parameter] public SystemHierarchyDto? HierarchyData { get; set; }
+    [Parameter] public EventCallback<int> OnAddSubsystem { get; set; }
+    [Parameter] public EventCallback<int> OnEditSubsystem { get; set; }
+    [Parameter] public EventCallback<int> OnDeleteSubsystem { get; set; }
+
+    private HashSet<HierarchyNode> _treeItems = new();
+    private HierarchyNode? _selectedValue;
+    private HierarchyNode? _activatedValue;
+
+    protected override void OnParametersSet()
+    {
+        BuildTreeItems();
+        base.OnParametersSet();
+    }
+
+    private void BuildTreeItems()
+    {
+        _treeItems.Clear();
+        
+        if (HierarchyData == null) 
+            return;
+
+        var systemNode = new HierarchyNode
+        {
+            Text = HierarchyData.Name,
+            Type = HierarchyData.Type,
+            IsSystem = true,
+            SystemId = HierarchyData.Id,
+            IsExpanded = true,
+            Children = new HashSet<HierarchyNode>()
+        };
+
+        foreach (var subsystem in HierarchyData.Subsystems)
+        {
+            var subsystemNode = new HierarchyNode
+            {
+                Text = subsystem.Name,
+                Type = subsystem.Type,
+                IsSystem = false,
+                SystemId = HierarchyData.Id,
+                SubsystemId = subsystem.Id,
+                Children = new HashSet<HierarchyNode>()
+            };
+            systemNode.Children.Add(subsystemNode);
+        }
+
+        _treeItems.Add(systemNode);
+    }
+
+    public class HierarchyNode
+    {
+        public string Text { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public bool IsSystem { get; set; }
+        public int SystemId { get; set; }
+        public int? SubsystemId { get; set; }
+        public bool IsExpanded { get; set; } = true;
+        public HashSet<HierarchyNode> Children { get; set; } = new();
+    }
+}

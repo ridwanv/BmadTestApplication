@@ -17,10 +17,13 @@ public interface IApplicationDbContext: IAsyncDisposable
     DbSet<Product> Products { get; set; }
     DbSet<Tenant> Tenants { get; set; }
     DbSet<Contact> Contacts { get; set; }
+    DbSet<Domain.Entities.System> Systems { get; set; }
+    DbSet<Subsystem> Subsystems { get; set; }
     DbSet<LoginAudit> LoginAudits { get; set; }
     DbSet<UserLoginRiskSummary> UserLoginRiskSummaries { get; set; }
     ChangeTracker ChangeTracker { get; }
 
     DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
+    DbSet<AttributeDefinition> AttributeDefinitions { get; set; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

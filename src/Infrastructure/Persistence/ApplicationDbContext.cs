@@ -27,9 +27,12 @@ public class ApplicationDbContext : IdentityDbContext<
     public DbSet<PicklistSet> PicklistSets { get; set; }
     public DbSet<Product> Products { get; set; }
     public DbSet<Contact> Contacts { get; set; }
+    public DbSet<Domain.Entities.System> Systems { get; set; }
+    public DbSet<Subsystem> Subsystems { get; set; }
     public DbSet<LoginAudit> LoginAudits { get; set; }
     public DbSet<UserLoginRiskSummary> UserLoginRiskSummaries { get; set; }
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
+    public DbSet<CleanArchitecture.Blazor.Domain.Entities.AttributeDefinition> AttributeDefinitions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

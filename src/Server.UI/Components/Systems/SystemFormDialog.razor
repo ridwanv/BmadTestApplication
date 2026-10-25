@@ -1,0 +1,341 @@
+@using CleanArchitecture.Blazor.Application.Features.Systems.DTOs
+@using CleanArchitecture.Blazor.Application.Features.Systems.Commands.Create
+@using CleanArchitecture.Blazor.Application.Features.Systems.Commands.Update
+@using CleanArchitecture.Blazor.Application.Features.Systems.Queries.GetById
+
+@inject IStringLocalizer<SystemFormDialog> L
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isFormValid" @bind-IsTouched="@_isFormTouched" ReadOnly="@_isReadOnly">
+            <MudContainer Style="max-height: 70vh; overflow-y: auto;">
+                <MudGrid>
+                    <!-- Basic Information Section -->
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">
+                            <MudIcon Icon="Icons.Material.Outlined.Info" Class="mr-2" />
+                            Basic Information
+                        </MudText>
+                    </MudItem>
+                    
+                    <!-- Name -->
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_model.Name"
+                                      Label="System Name"
+                                      Required="true"
+                                      RequiredError="System name is required"
+                                      MaxLength="255"
+                                      Counter="255"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Enter a unique system name"
+                                      Immediate="true" />
+                    </MudItem>
+                    
+                    <!-- Status -->
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="_model.Status"
+                                   Label="Status"
+                                   Required="true"
+                                   RequiredError="Status is required"
+                                   Variant="Variant.Outlined"
+                                   HelperText="Select system status">
+                            <MudSelectItem Value="@("Active")" Text="Active" />
+                            <MudSelectItem Value="@("Inactive")" Text="Inactive" />
+                            <MudSelectItem Value="@("Deprecated")" Text="Deprecated" />
+                            <MudSelectItem Value="@("Planned")" Text="Planned" />
+                        </MudSelect>
+                    </MudItem>
+                    
+                    <!-- Description -->
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.Description"
+                                      Label="Description"
+                                      Required="true"
+                                      RequiredError="Description is required"
+                                      Lines="3"
+                                      MaxLength="1000"
+                                      Counter="1000"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Provide a detailed description of the system"
+                                      Immediate="true" />
+                    </MudItem>
+                    
+                    <!-- Category and Type -->
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="_model.Category"
+                                   Label="Category"
+                                   Required="true"
+                                   RequiredError="Category is required"
+                                   Variant="Variant.Outlined"
+                                   HelperText="Select system category">
+                            <MudSelectItem Value="@("Business Application")" Text="Business Application" />
+                            <MudSelectItem Value="@("Infrastructure")" Text="Infrastructure" />
+                            <MudSelectItem Value="@("Database")" Text="Database" />
+                            <MudSelectItem Value="@("Integration")" Text="Integration" />
+                            <MudSelectItem Value="@("Security")" Text="Security" />
+                            <MudSelectItem Value="@("Monitoring")" Text="Monitoring" />
+                        </MudSelect>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="_model.Type"
+                                   Label="Type"
+                                   Required="true"
+                                   RequiredError="Type is required"
+                                   Variant="Variant.Outlined"
+                                   HelperText="Select system type">
+                            <MudSelectItem Value="@("Web Application")" Text="Web Application" />
+                            <MudSelectItem Value="@("Desktop Application")" Text="Desktop Application" />
+                            <MudSelectItem Value="@("Mobile Application")" Text="Mobile Application" />
+                            <MudSelectItem Value="@("Service")" Text="Service" />
+                            <MudSelectItem Value="@("API")" Text="API" />
+                            <MudSelectItem Value="@("Database")" Text="Database" />
+                            <MudSelectItem Value="@("Legacy System")" Text="Legacy System" />
+                        </MudSelect>
+                    </MudItem>
+                    
+                    <!-- System Attributes Section -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">
+                            <MudIcon Icon="Icons.Material.Outlined.Settings" Class="mr-2" />
+                            System Attributes
+                        </MudText>
+                    </MudItem>
+                    
+                    <!-- COTS/Custom -->
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.body2" Class="mb-2">COTS or Custom *</MudText>
+                        <MudRadioGroup T="string" @bind-SelectedOption="_model.CotsCustom" Required="true">
+                            <MudRadio T="string" Option="@("COTS")" Color="Color.Primary">Commercial Off-The-Shelf (COTS)</MudRadio>
+                            <MudRadio T="string" Option="@("Custom")" Color="Color.Primary">Custom Developed</MudRadio>
+                        </MudRadioGroup>
+                    </MudItem>
+                    
+                    <!-- Insource/Outsource -->
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.body2" Class="mb-2">Insource or Outsource *</MudText>
+                        <MudRadioGroup T="string" @bind-SelectedOption="_model.InsourceOutsource" Required="true">
+                            <MudRadio T="string" Option="@("Insource")" Color="Color.Primary">Insource</MudRadio>
+                            <MudRadio T="string" Option="@("Outsource")" Color="Color.Primary">Outsource</MudRadio>
+                        </MudRadioGroup>
+                    </MudItem>
+                    
+                    <!-- Hosting Section -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">
+                            <MudIcon Icon="Icons.Material.Outlined.Cloud" Class="mr-2" />
+                            Hosting Information
+                        </MudText>
+                    </MudItem>
+                    
+                    <!-- Current Hosting -->
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="_model.HostingCurrent"
+                                   Label="Current Hosting"
+                                   Required="true"
+                                   RequiredError="Current hosting is required"
+                                   Variant="Variant.Outlined"
+                                   HelperText="Select current hosting environment">
+                            <MudSelectItem Value="@("On-Premises")" Text="On-Premises" />
+                            <MudSelectItem Value="@("Azure")" Text="Azure" />
+                            <MudSelectItem Value="@("AWS")" Text="AWS" />
+                            <MudSelectItem Value="@("Google Cloud")" Text="Google Cloud" />
+                            <MudSelectItem Value="@("Hybrid")" Text="Hybrid" />
+                            <MudSelectItem Value="@("Other")" Text="Other" />
+                        </MudSelect>
+                    </MudItem>
+                    
+                    <!-- Target Hosting -->
+                    <MudItem xs="12" md="6">
+                        <MudSelect @bind-Value="_model.HostingTarget"
+                                   Label="Target Hosting"
+                                   Variant="Variant.Outlined"
+                                   HelperText="Select target hosting environment (if different from current)">
+                            <MudSelectItem Value="@("")" Text="Same as Current" />
+                            <MudSelectItem Value="@("On-Premises")" Text="On-Premises" />
+                            <MudSelectItem Value="@("Azure")" Text="Azure" />
+                            <MudSelectItem Value="@("AWS")" Text="AWS" />
+                            <MudSelectItem Value="@("Google Cloud")" Text="Google Cloud" />
+                            <MudSelectItem Value="@("Hybrid")" Text="Hybrid" />
+                            <MudSelectItem Value="@("Other")" Text="Other" />
+                        </MudSelect>
+                    </MudItem>
+                    
+                    <!-- Owner Assignment -->
+                    <MudItem xs="12" Class="mt-4">
+                        <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-3">
+                            <MudIcon Icon="Icons.Material.Outlined.Person" Class="mr-2" />
+                            Ownership
+                        </MudText>
+                    </MudItem>
+                    
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.OwnerId"
+                                      Label="Owner ID"
+                                      Required="true"
+                                      RequiredError="Owner ID is required"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Enter the system owner's user ID"
+                                      Immediate="true" />
+                    </MudItem>
+                </MudGrid>
+            </MudContainer>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">
+            Cancel
+        </MudButton>
+        <MudLoadingButton Loading="@_processing"
+                          LoadingText="@(_isEditMode ? "Updating..." : "Creating...")"
+                          OnClick="Submit"
+                          Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          Disabled="@(!_isFormValid || !_isFormTouched)">
+            @(_isEditMode ? "Update" : "Create") System
+        </MudLoadingButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public SystemDto? SystemDto { get; set; }
+    [Parameter] public bool IsEditMode { get; set; }
+    
+    private MudForm _form = default!;
+    private bool _isFormValid;
+    private bool _isFormTouched;
+    private bool _processing = false;
+    private bool _isReadOnly => false; // Could be used for view-only mode
+    private bool _isEditMode => IsEditMode && SystemDto is not null;
+    
+    private SystemFormModel _model = new();
+    
+    protected override void OnInitialized()
+    {
+        if (_isEditMode && SystemDto is not null)
+        {
+            _model = new SystemFormModel
+            {
+                Id = SystemDto.Id,
+                Name = SystemDto.Name,
+                Description = SystemDto.Description,
+                Category = SystemDto.Category,
+                Type = SystemDto.Type,
+                CotsCustom = SystemDto.CotsCustom,
+                HostingCurrent = SystemDto.HostingCurrent,
+                HostingTarget = SystemDto.HostingTarget,
+                InsourceOutsource = SystemDto.InsourceOutsource,
+                OwnerId = SystemDto.OwnerId,
+                Status = SystemDto.Status,
+                TenantId = SystemDto.TenantId
+            };
+        }
+        else
+        {
+            // Set defaults for new system
+            _model.Status = "Active";
+            _model.CotsCustom = "Custom";
+            _model.InsourceOutsource = "Insource";
+            _model.HostingCurrent = "On-Premises";
+        }
+    }
+    
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+    
+    private async Task Submit()
+    {
+        if (!_isFormValid) return;
+        
+        try
+        {
+            _processing = true;
+            
+            if (_isEditMode)
+            {
+                var updateCommand = new UpdateSystemCommand
+                {
+                    Id = _model.Id,
+                    Name = _model.Name,
+                    Description = _model.Description,
+                    Category = _model.Category,
+                    Type = _model.Type,
+                    CotsCustom = _model.CotsCustom,
+                    HostingCurrent = _model.HostingCurrent,
+                    HostingTarget = _model.HostingTarget,
+                    InsourceOutsource = _model.InsourceOutsource,
+                    OwnerId = _model.OwnerId,
+                    Status = _model.Status,
+                    TenantId = _model.TenantId
+                };
+                
+                var result = await Mediator.Send(updateCommand);
+                if (result.Succeeded)
+                {
+                    Snackbar.Add($"System '{_model.Name}' updated successfully", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add($"Error updating system: {result.ErrorMessage}", Severity.Error);
+                }
+            }
+            else
+            {
+                var createCommand = new CreateSystemCommand
+                {
+                    Name = _model.Name,
+                    Description = _model.Description,
+                    Category = _model.Category,
+                    Type = _model.Type,
+                    CotsCustom = _model.CotsCustom,
+                    HostingCurrent = _model.HostingCurrent,
+                    HostingTarget = _model.HostingTarget,
+                    InsourceOutsource = _model.InsourceOutsource,
+                    OwnerId = _model.OwnerId,
+                    Status = _model.Status,
+                    TenantId = _model.TenantId
+                };
+                
+                var result = await Mediator.Send(createCommand);
+                if (result.Succeeded)
+                {
+                    Snackbar.Add($"System '{_model.Name}' created successfully", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add($"Error creating system: {result.ErrorMessage}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+    
+    private class SystemFormModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public string CotsCustom { get; set; } = string.Empty;
+        public string HostingCurrent { get; set; } = string.Empty;
+        public string HostingTarget { get; set; } = string.Empty;
+        public string InsourceOutsource { get; set; } = string.Empty;
+        public string OwnerId { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string? TenantId { get; set; }
+    }
+}
